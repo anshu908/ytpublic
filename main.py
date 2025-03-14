@@ -1,38 +1,38 @@
-from flask import Flask, request, jsonify
-import yt_dlp
+from pyrogram import Client, filters
+from pytube import YouTube
+import os
 
-app = Flask(__name__)
+# Bot configuration
+API_ID = "14050586"
+API_HASH = "42a60d9c657b106370c79bb0a8ac560c"
+BOT_TOKEN = "8077840807:AAEjwYQJ3N3vzLnYfaaxJty9yOternFcvXM"
 
-def get_video_info(url):
-    """Fetch available video formats and details."""
-    ydl_opts = {"quiet": True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return info
+app = Client("yt_downloader_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-@app.route('/download', methods=['GET'])
-def download_video():
-    url = request.args.get('url')
-    if not url:
-        return jsonify({"error": "URL parameter is required"}), 400
-
+def download_video(url):
     try:
-        info = get_video_info(url)
-        formats = [
-            {
-                "format_id": f["format_id"],
-                "ext": f["ext"],
-                "resolution": f.get("resolution"),
-                "filesize": f.get("filesize"),
-                "url": f["url"]
-            } 
-            for f in info["formats"] if f.get("url")
-        ]
-        return jsonify({"title": info["title"], "formats": formats})
+        yt = YouTube(url)
+        stream = yt.streams.get_highest_resolution()
+        video_path = stream.download()
+        return video_path, yt.title
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return None, str(e)
 
-if __name__ == '__main__':
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+@app.on_message(filters.command("start"))
+def start(client, message):
+    message.reply_text("Send me a YouTube video link, and I'll download it for you!")
+
+@app.on_message(filters.text & filters.private)
+def download(client, message):
+    url = message.text.strip()
+    message.reply_text("Downloading video, please wait...")
+    video_path, title = download_video(url)
+    
+    if video_path:
+        message.reply_video(video=video_path, caption=f"Here is your video: {title}")
+        os.remove(video_path)  # Remove the file after sending
+    else:
+        message.reply_text(f"Failed to download video: {title}")
+
+if __name__ == "__main__":
+    app.run()
