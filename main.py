@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pytube import YouTube
 import os
+from flask import Flask
 
 # Bot configuration
 API_ID = "14050586"
@@ -8,6 +9,7 @@ API_HASH = "42a60d9c657b106370c79bb0a8ac560c"
 BOT_TOKEN = "8077840807:AAEjwYQJ3N3vzLnYfaaxJty9yOternFcvXM"
 
 app = Client("yt_downloader_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+web_app = Flask(__name__)
 
 def download_video(url):
     try:
@@ -34,5 +36,11 @@ def download(client, message):
     else:
         message.reply_text(f"Failed to download video: {title}")
 
+@web_app.route("/")
+def home():
+    return "YouTube Downloader Bot is running!"
+
 if __name__ == "__main__":
+    import threading
+    threading.Thread(target=lambda: web_app.run(host="0.0.0.0", port=8000)).start()
     app.run()
