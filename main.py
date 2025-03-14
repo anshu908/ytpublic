@@ -12,35 +12,15 @@ BOT_TOKEN = "8077840807:AAEjwYQJ3N3vzLnYfaaxJty9yOternFcvXM"
 app = Client("yt_downloader_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 web_app = Flask(__name__)
 
-def download_video(url, quality):
-    try:
-        ydl_opts = {
-            'format': f'best[height<={quality}]',  
-            'outtmpl': 'video.mp4',
-            'noplaylist': True,
-            'quiet': True
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+# ✅ URL ko session storage me store karenge
+session_data = {}
 
-        return "video.mp4", f"Video Downloaded in {quality}p"
-    except Exception as e:
-        return None, str(e)
-
-def download_audio(url):
-    try:
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': 'audio.mp3',
-            'noplaylist': True,
-            'quiet': True
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-
-        return "audio.mp3", "🎵 Enjoy Your Audio Track!"
-    except Exception as e:
-        return None, str(e)
+QUALITY_OPTIONS = {
+    "240p": "q1",
+    "360p": "q2",
+    "480p": "q3",
+    "audio": "a1"
+}
 
 @app.on_message(filters.command("start"))
 def start(client, message):
@@ -49,45 +29,60 @@ def start(client, message):
 @app.on_message(filters.text & filters.private)
 def ask_quality(client, message):
     url = message.text.strip()
+    session_data[message.chat.id] = url  # ✅ URL Store kiya
 
-    # ✅ Callback data ko short kiya
     buttons = [
-        [InlineKeyboardButton("🔹 240p (Fast)", callback_data=f"q_240|{url}")],
-        [InlineKeyboardButton("🔹 360p (Good)", callback_data=f"q_360|{url}")],
-        [InlineKeyboardButton("🔹 480p (Better)", callback_data=f"q_480|{url}")],
-        [InlineKeyboardButton("🎵 Audio Only", callback_data=f"a|{url}")]
+        [InlineKeyboardButton("🔹 240p", callback_data="q1")],
+        [InlineKeyboardButton("🔹 360p", callback_data="q2")],
+        [InlineKeyboardButton("🔹 480p", callback_data="q3")],
+        [InlineKeyboardButton("🎵 Audio", callback_data="a1")]
     ]
 
     message.reply_text("Select the quality you want:", reply_markup=InlineKeyboardMarkup(buttons))
 
 @app.on_callback_query()
 def handle_callback(client, callback_query):
-    data = callback_query.data.split("|")
+    chat_id = callback_query.message.chat.id
+    quality_map = {"q1": "240p", "q2": "360p", "q3": "480p", "a1": "audio"}
+    selected_quality = quality_map[callback_query.data]
+    
+    url = session_data.get(chat_id)  # ✅ Stored URL retrieve kiya
 
-    if data[0].startswith("q_"):
-        quality = data[0][2:]  # Extract quality (240, 360, 480)
-        url = data[1]
-        callback_query.message.edit_text(f"Downloading {quality}p video... Please wait ⏳")
-        
-        video_path, title = download_video(url, quality)
-        
-        if video_path:
-            callback_query.message.reply_video(video=video_path, caption=f"Here is your {quality}p video! 🎥")
-            os.remove(video_path)
-        else:
-            callback_query.message.reply_text(f"Failed to download video: {title}")
+    callback_query.message.edit_text(f"Downloading {selected_quality}... Please wait ⏳")
 
-    elif data[0] == "a":
-        url = data[1]
-        callback_query.message.edit_text("Downloading audio... 🎧")
-        
-        audio_path, title = download_audio(url)
-        
-        if audio_path:
-            callback_query.message.reply_audio(audio=audio_path, caption=title)
-            os.remove(audio_path)
-        else:
-            callback_query.message.reply_text(f"Failed to download audio: {title}")
+    if selected_quality == "audio":
+        file_path, title = download_audio(url)
+        callback_query.message.reply_audio(audio=file_path, caption=title)
+        os.remove(file_path)
+    else:
+        file_path, title = download_video(url, selected_quality)
+        callback_query.message.reply_video(video=file_path, caption=title)
+        os.remove(file_path)
+
+# ✅ Function to download YouTube videos
+def download_video(url, quality):
+    ydl_opts = {
+        'format': f'best[height<={quality}]',
+        'outtmpl': 'video.mp4',
+        'noplaylist': True,
+        'quiet': True,
+        'cookies': 'cookies.txt'  # ✅ Fix ke liye cookies use kiya
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+    return "video.mp4", f"Downloaded {quality} video"
+
+def download_audio(url):
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': 'audio.mp3',
+        'noplaylist': True,
+        'quiet': True,
+        'cookies': 'cookies.txt'  # ✅ Fix ke liye cookies use kiya
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+    return "audio.mp3", "Downloaded Audio"
 
 @web_app.route("/")
 def home():
