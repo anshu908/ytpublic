@@ -15,7 +15,7 @@ web_app = Flask(__name__)
 def download_video(url, quality):
     try:
         ydl_opts = {
-            'format': f'best[height<={quality}]',  # User selected quality
+            'format': f'best[height<={quality}]',  
             'outtmpl': 'video.mp4',
             'noplaylist': True,
             'quiet': True
@@ -30,7 +30,7 @@ def download_video(url, quality):
 def download_audio(url):
     try:
         ydl_opts = {
-            'format': 'bestaudio/best',  # Best available audio
+            'format': 'bestaudio/best',
             'outtmpl': 'audio.mp3',
             'noplaylist': True,
             'quiet': True
@@ -49,24 +49,25 @@ def start(client, message):
 @app.on_message(filters.text & filters.private)
 def ask_quality(client, message):
     url = message.text.strip()
-    
+
+    # ✅ Callback data ko short kiya
     buttons = [
-        [InlineKeyboardButton("🔹 240p (Fastest)", callback_data=f"quality_240_{url}")],
-        [InlineKeyboardButton("🔹 360p (Good Quality)", callback_data=f"quality_360_{url}")],
-        [InlineKeyboardButton("🔹 480p (Better Quality)", callback_data=f"quality_480_{url}")],
-        [InlineKeyboardButton("🎵 Audio Only", callback_data=f"audio_{url}")]
+        [InlineKeyboardButton("🔹 240p (Fast)", callback_data=f"q_240|{url}")],
+        [InlineKeyboardButton("🔹 360p (Good)", callback_data=f"q_360|{url}")],
+        [InlineKeyboardButton("🔹 480p (Better)", callback_data=f"q_480|{url}")],
+        [InlineKeyboardButton("🎵 Audio Only", callback_data=f"a|{url}")]
     ]
 
     message.reply_text("Select the quality you want:", reply_markup=InlineKeyboardMarkup(buttons))
 
 @app.on_callback_query()
 def handle_callback(client, callback_query):
-    data = callback_query.data.split("_")
-    
-    if data[0] == "quality":
-        quality = data[1]
-        url = "_".join(data[2:])
-        callback_query.message.edit_text(f"Downloading video in {quality}p... Please wait ⏳")
+    data = callback_query.data.split("|")
+
+    if data[0].startswith("q_"):
+        quality = data[0][2:]  # Extract quality (240, 360, 480)
+        url = data[1]
+        callback_query.message.edit_text(f"Downloading {quality}p video... Please wait ⏳")
         
         video_path, title = download_video(url, quality)
         
@@ -76,8 +77,8 @@ def handle_callback(client, callback_query):
         else:
             callback_query.message.reply_text(f"Failed to download video: {title}")
 
-    elif data[0] == "audio":
-        url = "_".join(data[1:])
+    elif data[0] == "a":
+        url = data[1]
         callback_query.message.edit_text("Downloading audio... 🎧")
         
         audio_path, title = download_audio(url)
